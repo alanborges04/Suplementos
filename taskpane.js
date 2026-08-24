@@ -73,12 +73,12 @@ async function runAutomation() {
                 
                 // 3. Se achou a última linha preenchida E a linha debaixo ainda está antes dos Totais
                 if (sourceRow !== -1 && targetRow < totalRowIndex) {
-                    let colCount = usedRange.columnCount;
+                    let colCount = 10; // O FREIO DE MÃO: Trava exatamente na coluna J
                     
                     let sourceRange = sheet.getRangeByIndexes(sourceRow, 0, 1, colCount); 
                     let targetRange = sheet.getRangeByIndexes(targetRow, 0, 1, colCount);
                     
-                    // O PULO DO GATO: Copia direto pra linha debaixo, SEM INSERIR UMA NOVA
+                    // Copia direto pra linha debaixo, SEM INSERIR UMA NOVA e SEM PASSAR DA COLUNA J
                     targetRange.copyFrom(sourceRange, Excel.RangeCopyType.all);
                     await context.sync();
                     
