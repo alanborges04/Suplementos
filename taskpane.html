@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Atualizador Fluxo Turbo</title>
+    <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #F9FAFB; margin: 0; padding: 15px; color: #1F2937; display: flex; flex-direction: column; min-height: 100vh; }
+        .header { text-align: center; margin-bottom: 20px; }
+        .header img { max-width: 120px; height: auto; }
+        .card { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        h2 { font-size: 16px; margin-top: 0; color: #E11D48; }
+        p { font-size: 13px; color: #6B7280; line-height: 1.5; }
+        .btn { background-color: #E11D48; color: white; border: none; border-radius: 20px; padding: 12px 20px; font-size: 14px; font-weight: bold; width: 100%; cursor: pointer; transition: background-color 0.3s; margin-top: 15px; }
+        .btn:hover { background-color: #BE123C; }
+        .btn:disabled { background-color: #D1D5DB; cursor: not-allowed; }
+        #status { margin-top: 15px; font-size: 12px; font-weight: bold; color: #E11D48; text-align: center; min-height: 20px; }
+        .signature { margin-top: auto; padding-top: 30px; padding-bottom: 10px; font-size: 10px; color: #9CA3AF; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="data:image/png;base64," alt="Grupo D&M" onerror="this.style.display='none'">
+    </div>
+    <div class="card">
+        <h2>Atualizador do Fluxo</h2>
+        <p>Este painel atualiza os vínculos, datas e copia as fórmulas da aba automaticamente.</p>
+        <button id="run-btn" class="btn">🚀 INICIAR PROCESSO</button>
+        <div id="status"></div>
+    </div>
+    <div class="signature">Criado por Alan Borges</div>
+    <script src="taskpane.js"></script>
+</body>
+</html>
