@@ -45,6 +45,10 @@ async function runAutomation() {
                 if (!usedRange.values) continue;
                 
                 let totalRowIndex = -1;
+                let sourceRow = -1;
+                let targetRow = -1;
+                
+                // 1. Acha em qual linha está a palavra TOTAIS
                 for (let r = 0; r < usedRange.rowCount; r++) {
                     let val = String(usedRange.values[r][0] || "").trim().toUpperCase();
                     if (val === "TOTAL" || val === "TOTAIS" || val.startsWith("TOTAIS ")) { 
@@ -53,29 +57,38 @@ async function runAutomation() {
                     }
                 }
                 
-                if (totalRowIndex !== -1 && totalRowIndex > 5) {
-                    let sourceRow = totalRowIndex - 1; 
-                    let targetRow = totalRowIndex;
+                // 2. Se achou os Totais, procura de baixo pra cima qual foi a última linha preenchida com dados (Data)
+                if (totalRowIndex > 5) {
+                    let relativeTotalIndex = totalRowIndex - usedRange.rowIndex;
+                    for (let r = relativeTotalIndex - 1; r >= 0; r--) {
+                        let val = String(usedRange.values[r][0] || "").trim();
+                        // Se a coluna da data não estiver vazia, achamos a fonte!
+                        if (val !== "" && val !== "-") {
+                            sourceRow = r + usedRange.rowIndex;
+                            targetRow = sourceRow + 1; // O alvo é exatamente a linha em branco debaixo dela
+                            break;
+                        }
+                    }
+                }
+                
+                // 3. Se achou a última linha preenchida E a linha debaixo ainda está antes dos Totais
+                if (sourceRow !== -1 && targetRow < totalRowIndex) {
+                    let colCount = usedRange.columnCount;
                     
-                    let rowToInsert = sheet.getRangeByIndexes(targetRow, 0, 1, 15).getEntireRow(); 
-                    rowToInsert.insert(Excel.InsertShiftDirection.down);
+                    let sourceRange = sheet.getRangeByIndexes(sourceRow, 0, 1, colCount); 
+                    let targetRange = sheet.getRangeByIndexes(targetRow, 0, 1, colCount);
                     
-                    let sourceRange = sheet.getRangeByIndexes(sourceRow, 0, 1, 10); 
-                    let targetRange = sheet.getRangeByIndexes(targetRow, 0, 1, 10);
-                    
+                    // O PULO DO GATO: Copia direto pra linha debaixo, SEM INSERIR UMA NOVA
                     targetRange.copyFrom(sourceRange, Excel.RangeCopyType.all);
-                    
-                    let dateCell = sheet.getCell(targetRow, 0); 
-                    dateCell.load("value, formulas"); 
                     await context.sync();
                     
                     targetRange.load("formulas, values"); 
                     await context.sync();
                     
-                    for (let c = 0; c < 10; c++) {
+                    for (let c = 0; c < colCount; c++) {
                         let val = String(targetRange.values[0][c] || "");
                         if (val.includes("#REF!") || val.includes("#NOME?")) {
-                            errorList.push({ sheet: sheetName, address: `Linha ${targetRow + 1}, Coluna ${c + 1}`, reason: `Erro retornado pelo Excel: ${val}` });
+                            errorList.push({ sheet: sheetName, address: `Linha ${targetRow + 1}, Coluna ${c + 1}`, reason: `Erro na fórmula: ${val}` });
                         }
                     }
                 }
