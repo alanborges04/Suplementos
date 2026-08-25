@@ -45,19 +45,26 @@ async function runAutomation() {
                 if (!usedRange.values) continue;
                 
                 let totalRowIndex = -1;
-                let sourceRow = -1;
-                let targetRow = -1;
+                let obsRowIndex = -1;
                 
-                // 1. Acha em qual linha está a palavra TOTAIS
+                // 1. Mapeia onde estão os limites (TOTAIS e OBSERVAÇÕES)
                 for (let r = 0; r < usedRange.rowCount; r++) {
-                    let val = String(usedRange.values[r][0] || "").trim().toUpperCase();
-                    if (val === "TOTAL" || val === "TOTAIS" || val.startsWith("TOTAIS ")) { 
-                        totalRowIndex = r + usedRange.rowIndex; 
-                        break; 
+                    let rowText = usedRange.values[r].join(" ").toUpperCase();
+                    
+                    if (totalRowIndex === -1 && (rowText.includes("TOTAIS") || rowText.includes("TOTAL"))) {
+                        totalRowIndex = r + usedRange.rowIndex;
+                    }
+                    if (obsRowIndex === -1 && (rowText.includes("OBSERVAÇÕES") || rowText.includes("OBSERVACOES"))) {
+                        obsRowIndex = r + usedRange.rowIndex;
                     }
                 }
                 
-                // 2. Procura de baixo pra cima qual foi a última linha com data
+                // ==========================================
+                // BLOCO 1: ATUALIZAÇÃO DO FLUXO (PARTE DE CIMA)
+                // ==========================================
+                let sourceRow = -1;
+                let targetRow = -1;
+                
                 if (totalRowIndex > 5) {
                     let relativeTotalIndex = totalRowIndex - usedRange.rowIndex;
                     for (let r = relativeTotalIndex - 1; r >= 0; r--) {
@@ -70,35 +77,27 @@ async function runAutomation() {
                     }
                 }
                 
-                // 3. Copia a linha e ajusta a fórmula com a data correta
                 if (sourceRow !== -1 && targetRow < totalRowIndex) {
-                    let colCount = 10; // Mantém a trava na coluna J
+                    let colCount = 10; // Trava na coluna J
                     
                     let sourceRange = sheet.getRangeByIndexes(sourceRow, 0, 1, colCount); 
                     let targetRange = sheet.getRangeByIndexes(targetRow, 0, 1, colCount);
                     
-                    // Copia tudo primeiro
                     targetRange.copyFrom(sourceRange, Excel.RangeCopyType.all);
                     await context.sync();
                     
-                    // Lê a data velha e a data nova da coluna A (em formato de texto)
                     let oldDateCell = sheet.getCell(sourceRow, 0);
                     let newDateCell = sheet.getCell(targetRow, 0);
                     oldDateCell.load("text");
                     newDateCell.load("text");
                     await context.sync();
                     
-                    // Exemplo: pega "20/08/2026" e "21/08/2026"
                     let oldDateStr = oldDateCell.text[0][0]; 
                     let newDateStr = newDateCell.text[0][0]; 
-                    
-                    // Converte as barras para pontos: "20.08.2026" e "21.08.2026"
                     let oldDateDot = oldDateStr.split('/').join('.');
                     let newDateDot = newDateStr.split('/').join('.');
                     
-                    // Índices das colunas que precisam de alteração: C(2), F(5) e I(8)
-                    let colsToUpdate = [2, 5, 8];
-                    
+                    let colsToUpdate = [2, 5, 8]; // Colunas C, F e I
                     for (let c of colsToUpdate) {
                         let cell = sheet.getCell(targetRow, c);
                         cell.load("formulas");
@@ -106,25 +105,66 @@ async function runAutomation() {
                         
                         let formula = cell.formulas[0][0];
                         if (formula && formula.startsWith("=")) {
-                            // Substitui a data antiga pela nova dentro do link da fórmula
                             formula = formula.split(oldDateDot).join(newDateDot);
                             cell.formulas = [[formula]];
                         }
                     }
                     await context.sync();
+                }
+
+                // ==========================================
+                // BLOCO 2: ATUALIZAÇÃO DAS OBSERVAÇÕES (PARTE DE BAIXO)
+                // ==========================================
+                if (obsRowIndex !== -1) {
+                    let obsSourceRow = -1;
+                    let obsTargetRow = -1;
                     
-                    // Checagem final de erros
-                    targetRange.load("formulas, values"); 
-                    await context.sync();
-                    
-                    for (let c = 0; c < colCount; c++) {
-                        let val = String(targetRange.values[0][c] || "");
-                        if (val.includes("#REF!") || val.includes("#NOME?")) {
-                            errorList.push({ sheet: sheetName, address: `Linha ${targetRow + 1}, Coluna ${c + 1}`, reason: `Erro na fórmula: ${val}` });
+                    let relativeObsIndex = obsRowIndex - usedRange.rowIndex;
+                    // Procura de baixo pra cima a última linha preenchida nas observações
+                    for (let r = usedRange.rowCount - 1; r > relativeObsIndex; r--) {
+                        let val = String(usedRange.values[r][0] || "").trim();
+                        if (val !== "" && val !== "-") {
+                            obsSourceRow = r + usedRange.rowIndex;
+                            obsTargetRow = obsSourceRow + 1; 
+                            break;
                         }
+                    }
+
+                    if (obsSourceRow !== -1) {
+                        let colCount = 10;
+                        let obsSourceRange = sheet.getRangeByIndexes(obsSourceRow, 0, 1, colCount); 
+                        let obsTargetRange = sheet.getRangeByIndexes(obsTargetRow, 0, 1, colCount);
+                        
+                        obsTargetRange.copyFrom(obsSourceRange, Excel.RangeCopyType.all);
+                        await context.sync();
+
+                        let oldObsDateCell = sheet.getCell(obsSourceRow, 0);
+                        let newObsDateCell = sheet.getCell(obsTargetRow, 0);
+                        oldObsDateCell.load("text");
+                        newObsDateCell.load("text");
+                        await context.sync();
+
+                        let oldObsDateStr = oldObsDateCell.text[0][0]; 
+                        let newObsDateStr = newObsDateCell.text[0][0]; 
+                        let oldObsDateDot = oldObsDateStr.split('/').join('.');
+                        let newObsDateDot = newObsDateStr.split('/').join('.');
+
+                        // O PULO DO GATO DA MESCLAGEM: Atualiza apenas a coluna B (índice 1)
+                        let obsCell = sheet.getCell(obsTargetRow, 1);
+                        obsCell.load("formulas");
+                        await context.sync();
+                        
+                        let formula = obsCell.formulas[0][0];
+                        if (formula && formula.startsWith("=")) {
+                            formula = formula.split(oldObsDateDot).join(newObsDateDot);
+                            formula = formula.split(oldObsDateStr).join(newObsDateStr);
+                            obsCell.formulas = [[formula]];
+                        }
+                        await context.sync();
                     }
                 }
             }
+            
             setStatus("Calculando planilha na nuvem..."); 
             context.workbook.application.calculate(Excel.CalculationType.full); 
             await context.sync();
