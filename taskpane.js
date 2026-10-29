@@ -262,7 +262,8 @@ async function runAutomation() {
                 const link=external(f), tks=item.name.trim().toUpperCase()==="TKS";
                 const expected=tks?expectedTKS[col]:null;
                 let state=link?"endereco_identificado":"formula_sem_endereco_reconhecido";
-                if(link && link.fileDate && link.fileDate!==dt)state="ALERTA: data do nome não corresponde à coluna A";
+                if(link && !link.fileDate)state="ALERTA: nome do arquivo sem data reconhecível";
+                else if(link && link.fileDate!==dt)state="ALERTA: data do nome não corresponde à coluna A";
                 if(link && expected && expected!==link.sourceCell)state="ALERTA: célula de origem divergente";
                 rows.push({sheet:item.name,date:dt,dest:col+(j+5),field:targets[col],link,status:state,
                   error:/#(?:CONECTAR!|CONNECT!|REF!)/i.test(String(display||"")),expected});
