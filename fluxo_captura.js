@@ -72,6 +72,15 @@
     const box=element("div",{id:"fluxo-capture-ui",style:"border-top:1px solid #E5E7EB;margin-top:22px;padding-top:15px"});
     box.appendChild(element("h2",{}, "Fluxo Turbo 2.0 — Diário TKS"));
     box.appendChild(element("p",{}, "1. Abra o diário TKS e capture. 2. Abra o Fluxo Realizado, cole o pacote e visualize. 3. Confirme para preencher C, F e I. Os diários de origem não são alterados."));
+    box.appendChild(element("p",{},"Na planilha mestre, localize o diário da data desejada usando a referência atual:"));
+    const dateInput=element("input",{id:"fluxo-link-data",type:"text",placeholder:"DD/MM/AAAA",style:"box-sizing:border-box;width:100%;border:1px solid #CBD5E1;border-radius:6px;padding:8px;font-size:12px"});
+    dateInput.value=new Date().toLocaleDateString("pt-BR",{timeZone:"America/Bahia"});
+    box.appendChild(dateInput);
+    const linkButton=element("button",{id:"fluxo-localizar-link",className:"btn",style:"background:#334155;font-size:12px"},"LOCALIZAR DIÁRIO PELO VÍNCULO");
+    box.appendChild(linkButton);
+    const linkOutput=element("div",{id:"fluxo-origem-link",style:"font-size:12px;margin-top:8px;overflow-wrap:anywhere"});
+    box.appendChild(linkOutput);
+    linkButton.addEventListener("click",()=>findDiaryLink(dateInput.value,linkButton,linkOutput));
     const capture=element("button",{id:"fluxo-capturar",className:"btn",style:"background:#1D4ED8;font-size:12px"},"1. CAPTURAR DIÁRIO ABERTO");
     box.appendChild(capture);
     const copy=element("textarea",{id:"fluxo-pacote",rows:"3",spellcheck:"false",style:"box-sizing:border-box;width:100%;margin-top:10px;padding:8px;border:1px solid #CBD5E1;border-radius:6px;font:11px monospace;resize:vertical",placeholder:"Pacote capturado aparecerá aqui. Na planilha mestre, cole o mesmo conteúdo neste campo."});
@@ -102,6 +111,45 @@
     copy.addEventListener("input",()=>{state.preview=null;apply.disabled=true;showPreview("Pacote alterado. Confira o destino novamente.");});
     confirm.addEventListener("change",()=>{state.preview=null;apply.disabled=true;showPreview("Confirme novamente o destino antes da gravação.");});
     apply.addEventListener("click",()=>applyTarget(apply));
+  }
+  async function findDiaryLink(rawDate,button,output) {
+    button.disabled=true;output.textContent="";
+    try{
+      const date=dateOf(rawDate);
+      if(!date)throw new Error("Informe uma data DD/MM/AAAA válida.");
+      const ref=await Excel.run(async ctx=>{
+        const all=ctx.workbook.worksheets;all.load("items/name");await ctx.sync();
+        const found=all.items.filter(x=>normalize(x.name)==="TKS");
+        if(found.length!==1)throw new Error("Abra a planilha mestre com a aba TKS.");
+        const sheet=found[0];
+        const dates=sheet.getRange("A5:A65");dates.load("values,text");
+        const ranges={};
+        for(const c of ["C","F","I"]){ranges[c]=sheet.getRange(c+"5:"+c+"65");ranges[c].load("formulas");}
+        await ctx.sync();
+        const foundRows=[];
+        for(let i=0;i<61;i++)if((dateOf(dates.values[i]?.[0])||dateOf(dates.text[i]?.[0]))===date)foundRows.push(i);
+        if(foundRows.length!==1)throw new Error("Data não encontrada de forma única na coluna A.");
+        const links=[],i=foundRows[0];
+        for(const c of ["C","F","I"]){
+          const formula=String(ranges[c].formulas[i]?.[0]||"");
+          const match=formula.match(/^\s*=\s*'([^']*?)\[([^\]]+\.(?:xlsx|xlsm|xls))\]([^']+)'\s*!\s*(\$?[A-Z]{1,3}\$?\d+)\s*$/i);
+          if(!match)throw new Error("Vínculo não reconhecido em "+c+(i+5)+".");
+          const fileDate=expectedFileDate(match[2]);
+          if(!fileDate || fileDate!==date)throw new Error("Data incorreta no nome da origem de "+c+": "+match[2]);
+          links.push({folder:match[1],name:match[2]});
+        }
+        if(links.some(x=>x.folder!==links[0].folder || x.name!==links[0].name))
+          throw new Error("As três referências apontam para arquivos distintos. Corrija os links.");
+        return links[0];
+      });
+      const url=new URL(ref.name,ref.folder.endsWith("/")?ref.folder:ref.folder+"/");
+      if(url.protocol!=="https:"||!/(^|\.)sharepoint\.com$/i.test(url.hostname))
+        throw new Error("O endereço não pertence a um domínio SharePoint autorizado.");
+      const a=element("a",{href:url.href,target:"_blank",rel:"noopener noreferrer",style:"font-weight:600;color:#1D4ED8;text-decoration:underline"},"ABRIR DIÁRIO: "+ref.name);
+      output.appendChild(a);
+      setStatus("Endereço localizado. Clique para abrir o diário; nenhuma leitura remota foi feita.","ok");
+    }catch(e){setStatus("Localização interrompida: "+String(e.message||e),"error");}
+    finally{button.disabled=false;}
   }
   async function captureDaily(button,field){
     button.disabled=true;state.preview=null;
